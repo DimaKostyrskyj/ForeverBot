@@ -2,10 +2,10 @@
   "name": "forever-family-bot",
   "version": "1.0.0",
   "description": "Discord бот для семьи Forever на GTA 5 RP",
-  "main": "bot.js",
+  "main": "Index.js",
   "scripts": {
-    "start": "node bot.js",
-    "dev": "nodemon bot.js"
+    "start": "node Index.js",
+    "dev": "nodemon Index.js"
   },
   "keywords": [
     "discord",

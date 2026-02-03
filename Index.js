@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits, EmbedBuilder, PermissionFlagsBits, ActivityType } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const config = require('./config');
+const config = require('./Config');
 
 // Создаем клиента
 const client = new Client({
@@ -236,7 +236,7 @@ client.on('interactionCreate', async (interaction) => {
         
         const errorEmbed = new EmbedBuilder()
             .setColor(COLORS.BLACK)
-            .setDescription('✗ Произошла ошибка при выполнении команды');
+            .setDescription('❌ Произошла ошибка при выполнении команды');
 
         if (interaction.replied || interaction.deferred) {
             await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
@@ -257,7 +257,14 @@ async function handleApplication(interaction) {
     if (age < config.application.minAge) {
         const errorEmbed = new EmbedBuilder()
             .setColor(COLORS.BLACK)
-            .setDescription(`✗ Минимальный возраст для вступления: **${config.application.minAge} лет**`);
+            .setDescription(
+                `# ❌\n\n` +
+                `### Отказано в подаче заявки\n` +
+                `─────────────────────\n\n` +
+                `Минимальный возраст: **${config.application.minAge} лет**\n` +
+                `Ваш возраст: **${age} лет**\n` +
+                `─────────────────────`
+            );
         
         return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
@@ -266,84 +273,77 @@ async function handleApplication(interaction) {
     if (reason.length < config.application.minReasonLength) {
         const errorEmbed = new EmbedBuilder()
             .setColor(COLORS.BLACK)
-            .setDescription(`✗ Причина должна содержать минимум **${config.application.minReasonLength} символов**`);
-        
-        return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-    }
-
-    // Проверка на наличие активной заявки
-    const applications = loadApplications();
-    const hasActiveApplication = Object.values(applications).some(
-        app => app.userId === interaction.user.id && app.status === 'pending'
-    );
-
-    if (hasActiveApplication) {
-        const errorEmbed = new EmbedBuilder()
-            .setColor(COLORS.BLACK)
             .setDescription(
-                '✗ У вас уже есть **активная заявка**\n' +
-                'Дождитесь ответа администрации'
+                `# ❌\n\n` +
+                `### Причина слишком короткая\n` +
+                `─────────────────────\n\n` +
+                `Минимум: **${config.application.minReasonLength} символов**\n` +
+                `Ваша: **${reason.length} символов**\n\n` +
+                `Опишите подробнее, почему хотите\n` +
+                `вступить в Forever Family\n` +
+                `─────────────────────`
             );
         
         return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
 
-    // Создание embed заявки
-    const applicationEmbed = new EmbedBuilder()
-        .setColor(COLORS.WHITE)
-        .setDescription(
-            `# ЗАЯВКА В СЕМЬЮ\n` +
-            `─────────────────────\n\n`
-        )
-        .addFields(
-            {
-                name: '▫️ Кандидат',
-                value: `${interaction.user}\n\`${interaction.user.tag}\``,
-                inline: true
-            },
-            {
-                name: '▫️ Имя в игре',
-                value: `\`${name}\``,
-                inline: true
-            },
-            {
-                name: '▫️ Возраст',
-                value: `\`${age} лет\``,
-                inline: true
-            },
-            {
-                name: '▫️ Опыт на проекте',
-                value: `\`\`\`${experience}\`\`\``,
-                inline: false
-            },
-            {
-                name: '▫️ Причина вступления',
-                value: `\`\`\`${reason}\`\`\``,
-                inline: false
-            }
-        )
-        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
-        .setFooter({ text: `ID: ${interaction.user.id} • Forever Family` })
-        .setTimestamp();
+    // Проверка существующей заявки
+    const applications = loadApplications();
+    const existingApp = Object.values(applications).find(app => 
+        app.userId === interaction.user.id && app.status === 'pending'
+    );
 
-    // Отправка в канал заявок
-    const applicationChannel = interaction.guild.channels.cache.get(config.channels.applications);
-    if (!applicationChannel) {
+    if (existingApp) {
         const errorEmbed = new EmbedBuilder()
             .setColor(COLORS.BLACK)
-            .setDescription('✗ Ошибка: канал заявок не найден');
+            .setDescription(
+                `# ⏳\n\n` +
+                `### У вас уже есть активная заявка\n` +
+                `─────────────────────\n\n` +
+                `Дождитесь решения администрации\n` +
+                `по текущей заявке\n` +
+                `─────────────────────`
+            );
         
         return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
 
-    const message = await applicationChannel.send({ embeds: [applicationEmbed] });
+    // Отправка в канал заявок
+    const appChannel = interaction.guild.channels.cache.get(config.channels.applications);
+    if (!appChannel) {
+        const errorEmbed = new EmbedBuilder()
+            .setColor(COLORS.BLACK)
+            .setDescription('❌ Канал заявок не настроен');
+        
+        return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+    }
 
-    // Добавление реакций
-    await message.react('✅');
-    await message.react('❌');
+    const applicationEmbed = new EmbedBuilder()
+        .setColor(COLORS.WHITE)
+        .setAuthor({
+            name: interaction.user.tag,
+            iconURL: interaction.user.displayAvatarURL({ dynamic: true })
+        })
+        .setDescription(
+            `# 📋 НОВАЯ ЗАЯВКА\n` +
+            `─────────────────────\n\n` +
+            `**Игровое имя:** ${name}\n` +
+            `**Возраст:** ${age} лет\n` +
+            `**Опыт игры:** ${experience}\n\n` +
+            `**Почему хочет вступить:**\n` +
+            `${reason}\n` +
+            `─────────────────────\n` +
+            `Пользователь: ${interaction.user}\n` +
+            `ID: \`${interaction.user.id}\``
+        )
+        .setFooter({ text: 'Используйте /принять или /отклонить' })
+        .setTimestamp();
+
+    await appChannel.send({ embeds: [applicationEmbed] });
 
     // Сохранение заявки
-    applications[message.id] = {
+    const appId = `app_${Date.now()}_${interaction.user.id}`;
+    applications[appId] = {
         userId: interaction.user.id,
         userName: interaction.user.tag,
         name: name,
